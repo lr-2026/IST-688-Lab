@@ -3,7 +3,7 @@ from openai import OpenAI
 
 
 # Show title and description.
-st.title("Lab2 My Document question answering")
+st.title("Lab 2 Document ")
 st.write(
     "Upload a document below and ask a question about it – GPT will answer! "
     "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
@@ -56,4 +56,3 @@ else:
 
         # Stream the response to the app using `st.write_stream`.
         st.write_stream(stream)
-
