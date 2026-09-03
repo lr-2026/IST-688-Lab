@@ -1,7 +1,6 @@
 import streamlit as st
 from openai import OpenAI
 
-
 # Show title and description.
 st.title("Lab 2 Document ")
 
@@ -13,8 +12,13 @@ st.write(
 # Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
 # via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
 
-options = ["Nano", "Mini", "Advanced Model"]
-model = st.sidebar.radio("Models", options, index = None)
+use_advanced = st.sidebar.checkbox("Use advanced model")
+
+if use_advanced:
+    model_choice = "gpt-5"
+else:
+    tier = st.sidebar.radio("Choose a model", ["Nano", "Mini"])
+    model_choice = "gpt-5-nano" if tier == "Nano" else "gpt-5-mini"
 
 summary_type = st.sidebar.selectbox(
     'Summary Type',
@@ -23,18 +27,6 @@ summary_type = st.sidebar.selectbox(
      'Summarize in 5 bullet points'
 )
 )
-
-
-if model == "Nano":
-    model_choice = "gpt-5-nano"
-elif model == "Mini":
-    model_choice = "gpt-5-mini"
-elif model == "Advanced Model":
-    model_choice = "gpt-5"
-else:
-    model_choice = None
-
-
 
 openai_api_key = st.secrets["My_newkey"]
 
