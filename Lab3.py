@@ -30,9 +30,13 @@ if prompt := st.chat_input("What is up?"):
         st.markdown(prompt)
 
     client = st.session_state.client
+
+    buffer_size = 4
+    messages_to_send = st.session_state.messages[-buffer_size:]
+
     stream = client.chat.completions.create(
         model=model_to_use,
-        messages=st.session_state.messages,
+        messages=messages_to_send,
         stream=True,
     )
     
