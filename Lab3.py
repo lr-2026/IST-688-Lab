@@ -12,6 +12,23 @@ if "client" not in st.session_state:
     api_key = st.secrets["My_newkey"]
     st.session_state.client = OpenAI(api_key=api_key)
 
+    # --- System prompt: defines the bot's behavior for Part C ---
+SYSTEM_PROMPT = {
+    "role": "system",
+    "content": (
+        "You are a helpful assistant. Follow this exact behavior:\n"
+        "1. When the user asks a question, answer it.\n"
+        "2. After answering, always ask: 'Do you want more info?'\n"
+        "3. If the user says yes (or similar), give more information on the "
+        "same topic, then ask again: 'Do you want more info?'\n"
+        "4. If the user says no (or similar), respond by asking what else "
+        "you can help with.\n"
+        "5. Always explain answers simply enough that a 10-year-old could "
+        "understand them — use short sentences, simple words, and avoid "
+        "jargon."
+    ),
+}
+
 # Initialize chat history
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
@@ -32,7 +49,8 @@ if prompt := st.chat_input("What is up?"):
     client = st.session_state.client
 
     buffer_size = 4
-    messages_to_send = st.session_state.messages[-buffer_size:]
+    recent_messages = st.session_state.messages[-buffer_size:]
+    messages_to_send = [SYSTEM_PROMPT] + recent_messages
 
     stream = client.chat.completions.create(
         model=model_to_use,
