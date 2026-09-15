@@ -1,5 +1,22 @@
 import streamlit as st
 from openai import OpenAI
+import sys
+import chromadb   
+from pathlib import Path
+from pyPDF2 import PdfReader
+
+__import__('pysqlites3')
+sys.modules['sqlites3'] =sys.modules.pop('pysqlite3')
+
+# Create ChormaDB client
+chromadb_client =chromadb.PersistentClient(path='./ChomaDB_for_Lab')
+collection = chromadb_client.get_or_create_collction('Lab4collection')
+
+#### USING CHROMA DB WITH OPENAI EMBEDDINGS ####
+
+# Create OpenAI client
+if 'openai_client' not in st.session_state:
+    st.session_state.openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.title("Question Answering Chatbot")
 

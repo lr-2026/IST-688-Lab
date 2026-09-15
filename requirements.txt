@@ -1,2 +1,6 @@
 streamlit
 openai
+chromadb
+pysqlites3-binary
+pyPDF2
+protobuf ==3.20
