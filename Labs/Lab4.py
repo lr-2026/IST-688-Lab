@@ -1,22 +1,24 @@
 import streamlit as st
-from openai import OpenAI
 import sys
-import chromadb   
-from pathlib import Path
-from pyPDF2 import PdfReader
-
 __import__('pysqlites3')
 sys.modules['sqlites3'] =sys.modules.pop('pysqlite3')
+from openai import OpenAI
+import chromadb   
+from pathlib import Path
+from PyPDF2 import PdfReader
+
 
 # Create ChormaDB client
-chromadb_client =chromadb.PersistentClient(path='./ChomaDB_for_Lab')
-collection = chromadb_client.get_or_create_collction('Lab4collection')
+if "Lab4_VectorDB" not in st.session_state:
+    chroma_client = chromadb.PersistentClient(path="./ChromaDB_for_Lab")
+    collection = chroma_client.get_or_create_collection(name="Lab4Collection")
+    if collection.count() == 0:
+        load_pdfs_to_collection("./Lab-04-Data/", collection)
+    st.session_state.Lab4_VectorDB = collection
+else:
+    collection = st.session_state.Lab4_VectorDB
 
 #### USING CHROMA DB WITH OPENAI EMBEDDINGS ####
-
-# Create OpenAI client
-if 'openai_client' not in st.session_state:
-    st.session_state.openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.title("Question Answering Chatbot")
 
@@ -26,8 +28,8 @@ model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
 
 # Create the OpenAI client once and store it in session_state
 if "client" not in st.session_state:
-    api_key = st.secrets["My_newkey"]
-    st.session_state.client = OpenAI(api_key=api_key)
+    st.session_state.client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = st.session_state.client
 
     # --- System prompt: defines the bot's behavior for Part C ---
 SYSTEM_PROMPT = {
