@@ -1,7 +1,7 @@
 import streamlit as st
 import sys
-__import__('pysqlites3')
-sys.modules['sqlites3'] =sys.modules.pop('pysqlite3')
+__import__('pysqlite3')
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 from openai import OpenAI
 import chromadb   
 from pathlib import Path
@@ -22,14 +22,71 @@ else:
 
 st.title("Question Answering Chatbot")
 
-# Model selector (mini vs regular)
-openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
-model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
-
 # Create the OpenAI client once and store it in session_state
 if "client" not in st.session_state:
     st.session_state.client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 client = st.session_state.client
+
+# Model selector (mini vs regular)
+openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
+model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
+
+
+
+def get_embedding(text):
+    response = client.embeddings.create(input=text, model="text-embedding-3-small")
+    return response.data[0].embedding
+
+def extract_text_from_pdf(pdf_path):
+    reader = PdfReader(pdf_path)
+    text = ""
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            text += page_text + "\n"
+    return text
+
+def add_to_collection(collection, text, file_name):
+    embedding = get_embedding(text)
+    collection.add(documents=[text], ids=[file_name], embeddings=[embedding])
+
+def load_pdfs_to_collection(folder_path, collection):
+    for pdf_file in sorted(Path(folder_path).glob("*.pdf")):
+        text = extract_text_from_pdf(str(pdf_file))
+        add_to_collection(collection, text, pdf_file.name)
+
+
+    #### QUERYING A COLLECTION — ONLY USED FOR TESTING ####
+
+topic = st.sidebar.text_input('Topic', placeholder='Type your topic (e.g., GenAI)...')
+
+if topic:
+    client = st.session_state.client  # <-- use your actual client variable name here
+
+    response = client.embeddings.create(
+        input=topic,
+        model='text-embedding-3-small'
+    )
+
+    # Get the embedding
+    query_embedding = response.data[0].embedding
+
+    # Get the text related to this question (this prompt)
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=3  # The number of closest documents to return
+    )
+
+    # Display the results
+    st.subheader(f'Results for: {topic}')
+
+    for i in range(len(results['documents'][0])):
+        doc = results['documents'][0][i]
+        doc_id = results['ids'][0][i]
+
+        st.write(f'**{i+1}. {doc_id}**')
+else:
+    st.info('Enter a topic in the sidebar to search the collection')    
 
     # --- System prompt: defines the bot's behavior for Part C ---
 SYSTEM_PROMPT = {
