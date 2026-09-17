@@ -82,27 +82,7 @@ if "Lab4_VectorDB" not in st.session_state:
 else:
     collection = st.session_state.Lab4_VectorDB
 
-# ---------------------------------------------------------------------------
-# Part A: Optional test search — kept behind a checkbox so it doesn't
-# interfere with the real chatbot below. Check it to validate the vectorDB.
-# ---------------------------------------------------------------------------
-with st.sidebar:
-    show_test_search = st.checkbox("Show Part A test search")
 
-if show_test_search:
-    topic = st.sidebar.text_input(
-        "Topic", placeholder="Type your topic (e.g., GenAI)..."
-    )
-    if topic:
-        context_text, ids = get_relevant_context(collection, topic, n_results=3)
-        st.subheader(f"Results for: {topic}")
-        for i, doc_id in enumerate(ids):
-            st.write(f"**{i + 1}. {doc_id}**")
-    else:
-        st.info("Enter a topic in the sidebar to search the collection")
-
-
-# ---------------------------------------------------------------------------
 # Part B: The actual RAG chatbot
 # ---------------------------------------------------------------------------
 BASE_SYSTEM_PROMPT = (
