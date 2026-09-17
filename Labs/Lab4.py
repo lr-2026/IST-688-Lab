@@ -1,9 +1,6 @@
 import streamlit as st
 import sys
 
-# Fix for ChromaDB's sqlite3 requirement on Streamlit Community Cloud.
-# Wrapped in try/except so it also works locally, where pysqlite3-binary
-# usually isn't installed (and isn't needed, since local sqlite3 is fine).
 try:
     __import__('pysqlite3')
     sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -17,9 +14,9 @@ from PyPDF2 import PdfReader
 
 st.title("Lab 4: Chatbot (RAG)")
 
-# ---------------------------------------------------------------------------
+
 # Create the OpenAI client once and store it in session_state
-# ---------------------------------------------------------------------------
+
 if "client" not in st.session_state:
     st.session_state.client = OpenAI(api_key=st.secrets["My_newkey"])
 client = st.session_state.client
@@ -69,10 +66,8 @@ def get_relevant_context(collection, query_text, n_results=3):
     return context_text, ids
 
 
-# ---------------------------------------------------------------------------
-# Part A: Build (or reuse) the ChromaDB vector database
-# This runs AFTER the functions above are defined, so the call is safe.
-# ---------------------------------------------------------------------------
+# Part A: Building the ChromaDB vector database
+
 if "Lab4_VectorDB" not in st.session_state:
     chroma_client = chromadb.PersistentClient(path="./ChromaDB_for_Lab")
     collection = chroma_client.get_or_create_collection(name="Lab4Collection")
@@ -84,7 +79,7 @@ else:
 
 
 # Part B: The actual RAG chatbot
-# ---------------------------------------------------------------------------
+
 BASE_SYSTEM_PROMPT = (
     "You are a helpful course information assistant. You answer questions "
     "about course syllabi using the context provided below, which was "
