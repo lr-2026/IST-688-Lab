@@ -28,14 +28,9 @@ client = st.session_state.client
 openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
 model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
 
-
-# ---------------------------------------------------------------------------
-# Helper functions — must be defined BEFORE they're used below
-# ---------------------------------------------------------------------------
 def get_embedding(text):
     response = client.embeddings.create(input=text, model="text-embedding-3-small")
     return response.data[0].embedding
-
 
 def extract_text_from_pdf(pdf_path):
     reader = PdfReader(pdf_path)
