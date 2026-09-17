@@ -21,7 +21,7 @@ if "client" not in st.session_state:
     st.session_state.client = OpenAI(api_key=st.secrets["My_newkey"])
 client = st.session_state.client
 
-# Model selector (mini vs regular)
+# Model selector mini vs regular
 openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
 model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
 
@@ -109,7 +109,7 @@ if prompt := st.chat_input("Ask about a course..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # --- RAG step: retrieve relevant syllabus context for this prompt ---
+    #  RAG step: retrieve relevant syllabus context for this prompt 
     context_text, source_ids = get_relevant_context(collection, prompt, n_results=3)
     system_prompt = {
         "role": "system",
