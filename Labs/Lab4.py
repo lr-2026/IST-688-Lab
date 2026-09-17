@@ -82,7 +82,6 @@ if "Lab4_VectorDB" not in st.session_state:
 else:
     collection = st.session_state.Lab4_VectorDB
 
-
 # ---------------------------------------------------------------------------
 # Part A: Optional test search — kept behind a checkbox so it doesn't
 # interfere with the real chatbot below. Check it to validate the vectorDB.
