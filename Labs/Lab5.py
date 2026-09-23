@@ -5,9 +5,9 @@ import requests
 import streamlit as st
 from openai import OpenAI
 
-# ---------------------------------------------------------------------------
+
 # Part A: weather data function
-# ---------------------------------------------------------------------------
+
 
 def get_current_weather(location: str = "Syracuse, NY") -> dict:
     """
@@ -58,9 +58,9 @@ def get_current_weather(location: str = "Syracuse, NY") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
+
 # Part B: "What to Wear" bot (Streamlit + OpenAI)
-# ---------------------------------------------------------------------------
+
 
 st.title("👕 What to Wear Bot")
 st.write(
@@ -68,7 +68,7 @@ st.write(
     "based on the current weather."
 )
 
-# --- OpenAI client setup ---------------------------------------------------
+# --- OpenAI client setup -----------------
 api_key = st.secrets.get("My_newkey", None)
 if not api_key:
     api_key = st.sidebar.text_input("OpenAI API Key", type="password")
@@ -79,7 +79,7 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# --- Tool definition for the OpenAI API ------------------------------------
+# --- Tool definition for the OpenAI API ------
 tools = [
     {
         "type": "function",
@@ -110,7 +110,7 @@ tools = [
 
 available_functions = {"get_current_weather": get_current_weather}
 
-# --- UI ---------------------------------------------------------------------
+# --- UI -----
 city = st.text_input("City", placeholder="e.g. Syracuse, NY")
 go = st.button("What should I wear?")
 
@@ -188,7 +188,7 @@ if go:
         # Model answered directly without needing the tool
         advice = response_message.content
 
-    # --- Display results -----------------------------------------------
+    # --- Display results ---------------
     if weather_data:
         st.subheader(f"Current weather in {weather_data['resolved_location']}")
         col1, col2, col3 = st.columns(3)
