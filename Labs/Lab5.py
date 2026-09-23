@@ -69,7 +69,7 @@ st.write(
 )
 
 # --- OpenAI client setup ---------------------------------------------------
-api_key = st.secrets.get("OPENAI_API_KEY", None)
+api_key = st.secrets.get("My_newkey", None)
 if not api_key:
     api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
