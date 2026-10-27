@@ -4,9 +4,13 @@ import requests
 import streamlit as st
 from langchain.agents import create_agent
 
+# LangChain reads the key from this environment variable
 os.environ["OPENAI_API_KEY"] = st.secrets["My_newkey"]
 
 
+# ---------------------------------------------------------------
+# Part B: weather tool (same function as Lab 5)
+# ---------------------------------------------------------------
 def get_weather_data(location: str = "Syracuse, NY") -> dict:
     """
     Fetch current weather conditions for a location from wttr.in.
@@ -71,7 +75,9 @@ def get_weather_data(location: str = "Syracuse, NY") -> dict:
     }
 
 
-# --- Agent (replaces the client, tools JSON, and both API calls) ---
+# ---------------------------------------------------------------
+# Part C: the agent (replaces client, tools JSON, and both API calls)
+# ---------------------------------------------------------------
 agent = create_agent(
     model="openai:gpt-5-mini",
     tools=[get_weather_data],
@@ -85,15 +91,68 @@ agent = create_agent(
     ),
 )
 
-# --- UI ---
 st.title("👕 What to Wear Bot (LangChain)")
-location = st.text_input("City", placeholder="e.g. Syracuse, NY")
+st.write(
+    "Enter a city and get clothing suggestions and outdoor activity ideas "
+    "based on the current weather."
+)
 
-if st.button("Get advice"):
-    with st.spinner("Thinking..."):
-        result = agent.invoke(
-            {"messages": [{"role": "user", "content": f"What should I wear in {location}?"}]}
+city = st.text_input("City", placeholder="e.g. Syracuse, NY")
+go = st.button("Get advice")
+
+if go:
+    if city.strip():
+        user_prompt = (
+            f"What should I wear today in {city}, and what outdoor "
+            f"activities would be appropriate?"
+        )
+    else:
+        user_prompt = (
+            "What should I wear today, and what outdoor activities "
+            "would be appropriate?"
         )
 
+    with st.spinner("Thinking..."):
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": user_prompt}]}
+        )
+
+    advice = result["messages"][-1].content
+
     with st.chat_message("assistant"):
-        st.write(result["messages"][-1].content)
+        st.write(advice)
+
+    # -----------------------------------------------------------
+    # Part D: look inside the agent's conversation
+    # -----------------------------------------------------------
+    with st.expander("Behind the scenes"):
+        for message in result["messages"]:
+            st.write(f"**{message.type}**")
+            st.write(message.content)
+            if message.type == "ai" and message.tool_calls:
+                st.write(message.tool_calls)
+
+
+# ---------------------------------------------------------------
+# Part D answers (check these against what YOUR expander shows)
+# ---------------------------------------------------------------
+# a. With "Syracuse, NY" there are 4 messages:
+#    1. human - my question ("What should I wear today in Syracuse, NY...")
+#    2. ai    - the model asking to use the weather tool (content is empty)
+#    3. tool  - the dictionary my get_weather_data function returned
+#    4. ai    - the final clothing/activity advice
+#    The system prompt is not in the list; the agent adds it to every call.
+#
+# b. Message 2 (the first "ai" message). Its content is empty because the
+#    request is in message.tool_calls, not in the text. It holds the tool
+#    name ("get_weather_data"), the args ({"location": "Syracuse, NY"}),
+#    and a call id.
+#
+# c. In Lab 5:
+#    1. human -> the {"role": "user", ...} entry in my messages = [...] list
+#    2. ai    -> first_response = client.chat.completions.create(...) and
+#                messages.append({"role": "assistant", "tool_calls": ...})
+#    3. tool  -> function_to_call(**function_args) inside the for loop and
+#                messages.append({"role": "tool", "tool_call_id": ...})
+#    4. ai    -> second_response = client.chat.completions.create(...) and
+#                advice = second_response.choices[0].message.content
