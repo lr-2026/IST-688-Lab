@@ -134,25 +134,26 @@ if go:
 
 
 # ---------------------------------------------------------------
-# Part D answers (check these against what YOUR expander shows)
+# Part D answers (step 12)
 # ---------------------------------------------------------------
-# a. With "Syracuse, NY" there are 4 messages:
-#    1. human - my question ("What should I wear today in Syracuse, NY...")
-#    2. ai    - the model asking to use the weather tool (content is empty)
-#    3. tool  - the dictionary my get_weather_data function returned
+# a. For one city there are 4 messages:
+#    1. human - my question built from the city box
+#    2. ai    - the model asking to call get_weather_data (content is empty)
+#    3. tool  - the JSON returned by get_weather_data
 #    4. ai    - the final clothing/activity advice
-#    The system prompt is not in the list; the agent adds it to every call.
+#    (With "Syracuse, NY and Lima, Peru" there were 5 messages: two tool
+#     messages, because the model asked for both cities in one ai message.)
 #
-# b. Message 2 (the first "ai" message). Its content is empty because the
-#    request is in message.tool_calls, not in the text. It holds the tool
-#    name ("get_weather_data"), the args ({"location": "Syracuse, NY"}),
-#    and a call id.
+# b. Message 2 (the first ai message) asks for the tool. Its content is
+#    empty; the request is in message.tool_calls (name, args, id).
+#    The tool message has the same id, so each result is matched to its request.
 #
-# c. In Lab 5:
-#    1. human -> the {"role": "user", ...} entry in my messages = [...] list
-#    2. ai    -> first_response = client.chat.completions.create(...) and
-#                messages.append({"role": "assistant", "tool_calls": ...})
-#    3. tool  -> function_to_call(**function_args) inside the for loop and
-#                messages.append({"role": "tool", "tool_call_id": ...})
-#    4. ai    -> second_response = client.chat.completions.create(...) and
-#                advice = second_response.choices[0].message.content
+# c. In Lab 5, my own code created each message:
+#    1. human - lines 149-160: built the messages list (system + user prompt)
+#    2. ai    - lines 164-169: first client.chat.completions.create(tools=tools),
+#               then lines 177-193: appended the assistant tool_calls message
+#    3. tool  - lines 195-212: for loop ran get_current_weather and appended
+#               a {"role": "tool", "tool_call_id": ...} message for each call
+#    4. ai    - lines 229-232: second client.chat.completions.create
+#    Lab 5 also added an extra user message (lines 215-226) before the
+#    second call. LangChain did not need that.
