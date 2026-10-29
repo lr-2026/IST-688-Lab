@@ -120,7 +120,7 @@ if go:
     advice = result["messages"][-1].content
 
     with st.chat_message("assistant"):
-        st.write(advice)
+       st.write(advice.replace("~", "\\~"))
 
     # -----------------------------------------------------------
     # Part D: look inside the agent's conversation
