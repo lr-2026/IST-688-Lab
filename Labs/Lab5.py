@@ -89,7 +89,7 @@ st.write(
 
 # --- OpenAI client setup ---
 # The name must match the key in your .streamlit/secrets.toml
-api_key = st.secrets.get("My_newkey", None)
+api_key = st.secrets.get("OPENAI_API_KEY", None)
 if not api_key:
     api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 

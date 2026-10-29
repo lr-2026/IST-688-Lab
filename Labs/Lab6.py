@@ -5,7 +5,7 @@ import streamlit as st
 from langchain.agents import create_agent
 
 # LangChain reads the key from this environment variable
-os.environ["OPENAI_API_KEY"] = st.secrets["My_newkey"]
+os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 
 
 # ---------------------------------------------------------------

@@ -12,7 +12,7 @@ model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
 
 # Create the OpenAI client once and store it in session_state
 if "client" not in st.session_state:
-    api_key = st.secrets["My_newkey"]
+    api_key = st.secrets["OPENAI_API_KEY"]
     st.session_state.client = OpenAI(api_key=api_key)
 
 # System prompt: tells the bot how to behave (Part C)

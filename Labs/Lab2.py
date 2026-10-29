@@ -28,7 +28,7 @@ summary_type = st.sidebar.selectbox(
 )
 )
 
-openai_api_key = st.secrets["My_newkey"]
+openai_api_key = st.secrets["OPENAI_API_KEY"]
 
 
 # Create an OpenAI client.
