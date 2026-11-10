@@ -184,6 +184,37 @@ def get_ranking(question, use_rerank):
 
 
 # ---------------------------------------------------------------------------
+# Part A: find claims where stage 1 misses the answer key in the top 3
+# ---------------------------------------------------------------------------
+def first_relevant_rank(ranked_ids, relevant):
+    """1-based rank of the first relevant abstract, or None if absent."""
+    for i, d in enumerate(ranked_ids, 1):
+        if d in relevant:
+            return i
+    return None
+
+
+def find_misses(claim_ids):
+    """Claims whose relevant abstract is NOT in stage 1's top 3."""
+    rows = []
+    for cid in claim_ids:
+        before, _, _ = get_ranking(claims[cid], use_rerank=False)
+        rank = first_relevant_rank(before, qrels[cid])
+        if rank is None or rank > TOP_N:
+            after, _, _ = get_ranking(claims[cid], use_rerank=True)
+            after_rank = first_relevant_rank(after, qrels[cid])
+            rows.append({
+                "claim id": cid,
+                "claim": claims[cid][:100],
+                "answer key": ", ".join(sorted(qrels[cid])),
+                "stage 1 top 3": ", ".join(before[:TOP_N]),
+                "rank before": rank if rank else "not retrieved",
+                "rank after re-rank": after_rank if after_rank else "not retrieved",
+            })
+    return rows
+
+
+# ---------------------------------------------------------------------------
 # Part C: evaluation metrics
 # ---------------------------------------------------------------------------
 def ndcg_at_k(ranked_ids, relevant, k=10):
@@ -255,6 +286,18 @@ def show_ids(ranked_ids, relevant):
 tab_check, tab_eval = st.tabs(["Check a claim (A, B, D)", "Evaluate (C)"])
 
 with tab_check:
+    with st.expander("Part A: find claims where stage 1 misses the top 3"):
+        n_scan = st.slider("Claims to scan", 10, len(claims),
+                           min(50, len(claims)), step=10, key="scan_n")
+        if st.button("Find misses"):
+            with st.spinner(f"Scanning {n_scan} claims..."):
+                misses = find_misses(list(claims.keys())[:n_scan])
+            st.write(f"{len(misses)} of {n_scan} claims have no relevant "
+                     f"abstract in stage 1's top {TOP_N}.")
+            st.dataframe(misses, use_container_width=True)
+            st.caption("Pick 2-3 with a numeric 'rank before' (4 or lower): "
+                       "re-ranking can only promote abstracts stage 1 found.")
+
     claim_ids = list(claims.keys())
     choice = st.selectbox(
         "Pick a SciFact test claim (answer key available) or write your own below",
