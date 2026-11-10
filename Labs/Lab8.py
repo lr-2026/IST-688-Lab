@@ -18,7 +18,7 @@ import numpy as np
 from openai import OpenAI
 from sentence_transformers import CrossEncoder
 
-st.title("Lab 7: Claim Checker (RAG + Re-ranking)")
+st.title("Lab 8: Claim Checker (RAG + Re-ranking)")
 
 # ---------------------------------------------------------------------------
 # Settings
