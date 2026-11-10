@@ -142,7 +142,7 @@ collection = st.session_state.SciFact_VectorDB
 def stage1(question, n_results=N_CANDIDATES):
     results = collection.query(query_texts=[question], n_results=n_results)
     docs = results["documents"][0]
-    doc_ids = [m["doc_id"] for m in results["metadatas"][0]]
+   doc_ids = [cid.rsplit("_", 1)[0] for cid in results["ids"][0]]
     return doc_ids, docs
 
 
