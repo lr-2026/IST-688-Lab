@@ -10,6 +10,7 @@ except ImportError:
 import csv
 import json
 import math
+import tempfile
 import time
 from pathlib import Path
 
@@ -24,7 +25,13 @@ st.title("Lab 8: Claim Checker (RAG + Re-ranking)")
 # Settings
 # ---------------------------------------------------------------------------
 DATA_DIR = Path("./Lab-07-Data")           # put the SciFact files here
-CHROMA_PATH = "./ChromaDB_for_Lab"         # same folder as Lab 4 ...
+# NOTE: "./ChromaDB_for_Lab" resolves under /mount/src on Streamlit Cloud --
+# that's the git-synced source checkout, not a safe place for a live SQLite-
+# backed store (writes/locking aren't guaranteed there, which is what produced
+# the NotFoundError right after create_collection()). /tmp is guaranteed
+# writable on Cloud; it just means the index rebuilds after a container
+# restart instead of silently corrupting.
+CHROMA_PATH = str(Path(tempfile.gettempdir()) / "ChromaDB_for_Lab")
 COLLECTION_NAME = "SciFactChunks"          # ... but a NEW collection name
 CHUNK_WORDS = 120
 CHUNK_OVERLAP = 30
@@ -128,6 +135,26 @@ def chunk_words(text, size=CHUNK_WORDS, overlap=CHUNK_OVERLAP):
 # Stage 0: build the ChromaDB collection (same idea as Lab 4 Part A)
 # Chroma embeds with its default model (all-MiniLM-L6-v2): no OpenAI calls.
 # ---------------------------------------------------------------------------
+def _rebuild_collection(chroma_client, ids, docs, metas):
+    """Delete (if present) and recreate the collection, then bulk-add."""
+    try:
+        chroma_client.delete_collection(COLLECTION_NAME)
+    except Exception:
+        pass  # didn't exist yet -- fine
+    coll = chroma_client.create_collection(name=COLLECTION_NAME)
+    progress = st.progress(0.0, text="Embedding chunks (first run only)...")
+    batch = 500
+    for start in range(0, len(ids), batch):
+        coll.add(
+            ids=ids[start:start + batch],
+            documents=docs[start:start + batch],
+            metadatas=metas[start:start + batch],
+        )
+        progress.progress(min((start + batch) / len(ids), 1.0))
+    progress.empty()
+    return coll
+
+
 def build_collection():
     chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
     ids, docs, metas = [], [], []
@@ -140,18 +167,16 @@ def build_collection():
     if coll.count() != len(ids):
         # Empty, or incomplete because an earlier first run was interrupted:
         # start clean so the index always holds every chunk.
-        chroma_client.delete_collection(COLLECTION_NAME)
-        coll = chroma_client.create_collection(name=COLLECTION_NAME)
-        progress = st.progress(0.0, text="Embedding chunks (first run only)...")
-        batch = 500
-        for start in range(0, len(ids), batch):
-            coll.add(
-                ids=ids[start:start + batch],
-                documents=docs[start:start + batch],
-                metadatas=metas[start:start + batch],
-            )
-            progress.progress(min((start + batch) / len(ids), 1.0))
-        progress.empty()
+        try:
+            coll = _rebuild_collection(chroma_client, ids, docs, metas)
+        except chromadb.errors.NotFoundError:
+            # Seen on Streamlit Cloud: the collection we just created isn't
+            # immediately visible to the store on the first attempt. One
+            # retry against a fresh client has been enough in practice; if
+            # this still fails, the real fix is CHROMA_PATH (see above),
+            # not another retry.
+            chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
+            coll = _rebuild_collection(chroma_client, ids, docs, metas)
     return coll
 
 
