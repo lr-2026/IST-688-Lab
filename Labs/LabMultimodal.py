@@ -37,7 +37,8 @@ Respond in this exact format:
 1. ...
 2. ...
 3. ...
-**Answer:** Answer the user's question if one was asked; otherwise write "No question asked."
+**Answer:** Answer the user's question, which appears at the END of the user's message.
+Only write "No question asked." if the message says "The user did not ask a question."
 
 Rules:
 - Give exactly three key points.
@@ -160,7 +161,10 @@ if upload is not None:
     else:
         st.subheader("Preview")
         if mode == "Image":
-            st.image(upload.getvalue(), width=600)   # pass raw bytes for a reliable preview
+            # Embed the image as a data URL (same one prepare_image builds),
+            # which avoids Streamlit's media server and the broken-image icon.
+            data_url = prepare_image(upload)["image_url"]
+            st.markdown(f'<img src="{data_url}" width="600">', unsafe_allow_html=True)
         else:
             st.audio(upload)
 
