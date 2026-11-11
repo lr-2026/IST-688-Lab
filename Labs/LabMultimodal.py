@@ -83,13 +83,16 @@ def transcribe_audio(client, upload):
 def build_content(question, image_block=None, transcript=None):
     """Combine the user's question with EITHER an image block OR transcript text."""
     q = question.strip() if question else ""
-    question_text = f"User question: {q}" if q else "User question: (none)"
+    question_text = (f"The user asked this question about the content above: {q}"
+                     if q else "The user did not ask a question.")
 
-    content = [{"type": "input_text", "text": question_text}]
+    content = []
     if image_block is not None:
         content.append(image_block)
     if transcript is not None:
         content.append({"type": "input_text", "text": f"Audio transcript:\n{transcript}"})
+    # Question goes LAST so the model sees the evidence first, then the question
+    content.append({"type": "input_text", "text": question_text})
     return content
 
 
@@ -157,17 +160,23 @@ if upload is not None:
     else:
         st.subheader("Preview")
         if mode == "Image":
-            st.image(upload, use_container_width=True)
+            st.image(upload.getvalue(), width=600)   # pass raw bytes for a reliable preview
         else:
             st.audio(upload)
 
 # ---------------------------------------------------------------------------
 # 5. UI — Lab Part B: optional question, Analyze button, results
 # ---------------------------------------------------------------------------
-question = st.text_input("Optional question about the file",
-                         placeholder="e.g., What is the main takeaway of this slide?")
+# A form submits the question and the button click together,
+# so the typed question is never lost.
+with st.form("analyze_form"):
+    question = st.text_input("Optional question about the file",
+                             placeholder="e.g., What is the main takeaway of this slide?")
+    submitted = st.form_submit_button("Analyze", type="primary",
+                                      disabled=(upload is None or error is not None))
 
-if st.button("Analyze", type="primary", disabled=(upload is None or error is not None)):
+if submitted:
+    st.caption(f"Question sent: {question.strip() or '(none)'}")
     try:
         if mode == "Image":
             with st.spinner("Analyzing image..."):
