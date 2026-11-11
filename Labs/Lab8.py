@@ -49,6 +49,18 @@ client = st.session_state.client
 openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
 model_to_use = "gpt-4o-mini" if openai_model == "mini" else "gpt-4o"
 
+n_candidates_ui = st.sidebar.select_slider(
+    "Stage 1 candidates (N_CANDIDATES)",
+    options=[5, 10, 30, 50, 100],
+    value=N_CANDIDATES,
+    help=(
+        "How many chunks stage 1 retrieves before re-ranking. The deck's own "
+        "numbers (slide 17): recall keeps climbing past 30, but added latency "
+        "goes from 48ms (5) to 1006ms (100) -- 30 is the lab's chosen knee of "
+        "the curve, not a hard ceiling."
+    ),
+)
+
 
 # ---------------------------------------------------------------------------
 # Load SciFact data (replaces the PDF loading from Lab 4)
@@ -188,10 +200,25 @@ def unique_abstracts(doc_ids):
     return out
 
 
-def get_ranking(question, use_rerank):
+def find_true_rank(question, target_id, search_pool=300):
+    """
+    Diagnostic only (not used in the verdict path): query stage 1 with a much
+    wider pool than N_CANDIDATES to see whether the answer-key abstract exists
+    in the index at all, and if so, how far out stage 1 actually ranked it.
+    This answers "did we miss it, or does it genuinely not look similar?" --
+    separate from whether N_CANDIDATES was wide enough to catch it.
+    """
+    doc_ids, _ = stage1(question, n_results=search_pool)
+    ranked = unique_abstracts(doc_ids)
+    if target_id in ranked:
+        return ranked.index(target_id) + 1  # 1-based rank
+    return None  # not even in the top `search_pool` chunks
+
+
+def get_ranking(question, use_rerank, n_candidates=None):
     """Full abstract ranking for a claim, plus stage timings in ms."""
     t0 = time.perf_counter()
-    doc_ids, docs = stage1(question)
+    doc_ids, docs = stage1(question, n_results=n_candidates or N_CANDIDATES)
     t1 = time.perf_counter()
     if use_rerank:
         doc_ids, docs = rerank(question, doc_ids, docs)
@@ -283,12 +310,19 @@ with tab_check:
 
     if st.button("Check claim") and claim_text.strip():
         with st.spinner("Searching, re-ranking, and generating..."):
-            before_ids, s1_ms, _ = get_ranking(claim_text, use_rerank=False)
-            after_ids, _, rr_ms = get_ranking(claim_text, use_rerank=True)
+            before_ids, s1_ms, _ = get_ranking(
+                claim_text, use_rerank=False, n_candidates=n_candidates_ui
+            )
+            after_ids, _, rr_ms = get_ranking(
+                claim_text, use_rerank=True, n_candidates=n_candidates_ui
+            )
             before_verdict = get_verdict(claim_text, before_ids)
             after_verdict = get_verdict(claim_text, after_ids)
 
-        st.caption(f"Stage 1: {s1_ms:.0f} ms. Re-ranking added: {rr_ms:.0f} ms.")
+        st.caption(
+            f"Stage 1 (N={n_candidates_ui}): {s1_ms:.0f} ms. "
+            f"Re-ranking added: {rr_ms:.0f} ms."
+        )
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("Without re-ranking")
@@ -306,7 +340,25 @@ with tab_check:
                 rank_before = before_ids.index(r) + 1 if r in before_ids else None
                 rank_after = after_ids.index(r) + 1 if r in after_ids else None
                 if rank_before is None:
-                    st.warning(f"[{r}] was never found by stage 1, so re-ranking cannot help.")
+                    st.warning(
+                        f"[{r}] was never found among the top {n_candidates_ui} "
+                        "candidates, so re-ranking cannot help "
+                        "(it can only reorder what stage 1 retrieved)."
+                    )
+                    with st.spinner("Checking a wider pool for diagnosis..."):
+                        true_rank = find_true_rank(claim_text, r, search_pool=300)
+                    if true_rank is None:
+                        st.caption(
+                            f"[{r}] does not appear even in the top 300 chunks. "
+                            "This looks like a genuine similarity gap "
+                            "(surface vocabulary mismatch), not just a width problem."
+                        )
+                    else:
+                        st.caption(
+                            f"[{r}] actually ranks {true_rank} in a wider search. "
+                            f"Raising N_CANDIDATES to {true_rank} or above "
+                            "would recover it; re-ranking alone cannot."
+                        )
                 else:
                     st.write(f"[{r}] rank before re-ranking: {rank_before}, after: {rank_after}")
 
