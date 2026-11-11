@@ -35,7 +35,7 @@ TOP_N = 3                                  # abstracts that reach the prompt
 # OpenAI client (kept from Lab 4)
 # ---------------------------------------------------------------------------
 if "client" not in st.session_state:
-    st.session_state.client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    st.session_state.client = OpenAI(api_key=st.secrets["My_newkey"])
 client = st.session_state.client
 
 openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
@@ -142,7 +142,7 @@ collection = st.session_state.SciFact_VectorDB
 def stage1(question, n_results=N_CANDIDATES):
     results = collection.query(query_texts=[question], n_results=n_results)
     docs = results["documents"][0]
-   doc_ids = [cid.rsplit("_", 1)[0] for cid in results["ids"][0]]
+    doc_ids = [m["doc_id"] for m in results["metadatas"][0]]
     return doc_ids, docs
 
 
@@ -181,37 +181,6 @@ def get_ranking(question, use_rerank):
         doc_ids, docs = rerank(question, doc_ids, docs)
     t2 = time.perf_counter()
     return unique_abstracts(doc_ids), (t1 - t0) * 1000, (t2 - t1) * 1000
-
-
-# ---------------------------------------------------------------------------
-# Part A: find claims where stage 1 misses the answer key in the top 3
-# ---------------------------------------------------------------------------
-def first_relevant_rank(ranked_ids, relevant):
-    """1-based rank of the first relevant abstract, or None if absent."""
-    for i, d in enumerate(ranked_ids, 1):
-        if d in relevant:
-            return i
-    return None
-
-
-def find_misses(claim_ids):
-    """Claims whose relevant abstract is NOT in stage 1's top 3."""
-    rows = []
-    for cid in claim_ids:
-        before, _, _ = get_ranking(claims[cid], use_rerank=False)
-        rank = first_relevant_rank(before, qrels[cid])
-        if rank is None or rank > TOP_N:
-            after, _, _ = get_ranking(claims[cid], use_rerank=True)
-            after_rank = first_relevant_rank(after, qrels[cid])
-            rows.append({
-                "claim id": cid,
-                "claim": claims[cid][:100],
-                "answer key": ", ".join(sorted(qrels[cid])),
-                "stage 1 top 3": ", ".join(before[:TOP_N]),
-                "rank before": rank if rank else "not retrieved",
-                "rank after re-rank": after_rank if after_rank else "not retrieved",
-            })
-    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -286,18 +255,6 @@ def show_ids(ranked_ids, relevant):
 tab_check, tab_eval = st.tabs(["Check a claim (A, B, D)", "Evaluate (C)"])
 
 with tab_check:
-    with st.expander("Part A: find claims where stage 1 misses the top 3"):
-        n_scan = st.slider("Claims to scan", 10, len(claims),
-                           min(50, len(claims)), step=10, key="scan_n")
-        if st.button("Find misses"):
-            with st.spinner(f"Scanning {n_scan} claims..."):
-                misses = find_misses(list(claims.keys())[:n_scan])
-            st.write(f"{len(misses)} of {n_scan} claims have no relevant "
-                     f"abstract in stage 1's top {TOP_N}.")
-            st.dataframe(misses, use_container_width=True)
-            st.caption("Pick 2-3 with a numeric 'rank before' (4 or lower): "
-                       "re-ranking can only promote abstracts stage 1 found.")
-
     claim_ids = list(claims.keys())
     choice = st.selectbox(
         "Pick a SciFact test claim (answer key available) or write your own below",
@@ -328,6 +285,14 @@ with tab_check:
 
         if relevant is not None:
             st.write("Answer key (relevant abstract IDs):", ", ".join(sorted(relevant)))
+            st.write(f"Abstracts among the {N_CANDIDATES} candidates: {len(before_ids)}")
+            for r in sorted(relevant):
+                rank_before = before_ids.index(r) + 1 if r in before_ids else None
+                rank_after = after_ids.index(r) + 1 if r in after_ids else None
+                if rank_before is None:
+                    st.warning(f"[{r}] was never found by stage 1, so re-ranking cannot help.")
+                else:
+                    st.write(f"[{r}] rank before re-ranking: {rank_before}, after: {rank_after}")
 
 with tab_eval:
     st.write(
