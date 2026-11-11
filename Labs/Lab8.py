@@ -35,7 +35,15 @@ TOP_N = 3                                  # abstracts that reach the prompt
 # OpenAI client (kept from Lab 4)
 # ---------------------------------------------------------------------------
 if "client" not in st.session_state:
-    st.session_state.client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    api_key = (
+        st.secrets.get("OPENAI_API_KEY")
+        or st.secrets.get("my_key")
+        or st.secrets.get("My_newkey")
+    )
+    if not api_key:
+        st.error("No OpenAI key found in secrets (tried OPENAI_API_KEY, my_key, My_newkey).")
+        st.stop()
+    st.session_state.client = OpenAI(api_key=api_key)
 client = st.session_state.client
 
 openai_model = st.sidebar.selectbox("Which Model?", ("mini", "regular"))
@@ -110,14 +118,18 @@ def chunk_words(text, size=CHUNK_WORDS, overlap=CHUNK_OVERLAP):
 # ---------------------------------------------------------------------------
 def build_collection():
     chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
+    ids, docs, metas = [], [], []
+    for doc_id, text in abstracts.items():
+        for i, chunk in enumerate(chunk_words(text)):
+            ids.append(f"{doc_id}_{i}")
+            docs.append(chunk)
+            metas.append({"doc_id": doc_id})
     coll = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
-    if coll.count() == 0:
-        ids, docs, metas = [], [], []
-        for doc_id, text in abstracts.items():
-            for i, chunk in enumerate(chunk_words(text)):
-                ids.append(f"{doc_id}_{i}")
-                docs.append(chunk)
-                metas.append({"doc_id": doc_id})
+    if coll.count() != len(ids):
+        # Empty, or incomplete because an earlier first run was interrupted:
+        # start clean so the index always holds every chunk.
+        chroma_client.delete_collection(COLLECTION_NAME)
+        coll = chroma_client.create_collection(name=COLLECTION_NAME)
         progress = st.progress(0.0, text="Embedding chunks (first run only)...")
         batch = 500
         for start in range(0, len(ids), batch):
@@ -134,6 +146,10 @@ def build_collection():
 if "SciFact_VectorDB" not in st.session_state:
     st.session_state.SciFact_VectorDB = build_collection()
 collection = st.session_state.SciFact_VectorDB
+st.sidebar.caption(
+    f"Indexed {collection.count():,} chunks from {len(abstracts):,} abstracts "
+    "(deck: 12,477 chunks from 5,183)"
+)
 
 
 # ---------------------------------------------------------------------------
