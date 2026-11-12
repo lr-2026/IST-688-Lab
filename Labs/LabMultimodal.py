@@ -16,9 +16,9 @@ from pathlib import Path
 import streamlit as st
 from openai import OpenAI
 
-# ---------------------------------------------------------------------------
+
 # 1. CONFIG
-# ---------------------------------------------------------------------------
+
 MODEL = "gpt-4o-mini"               # vision-capable model used for analysis
 TRANSCRIPTION_MODEL = "whisper-1"   # speech-to-text model for audio
 MAX_BYTES = 5 * 1024 * 1024         # lab rule: 5 MB max (app rule, not an API limit)
@@ -164,9 +164,9 @@ def wav_duration_seconds(upload):
         return None
 
 
-# ---------------------------------------------------------------------------
+
 # 4. UI — Lab Part A: selector, uploader, preview
-# ---------------------------------------------------------------------------
+
 st.title("Multimodal Lab")
 st.write("Upload an image or a short audio clip to get a summary, three key points, "
          "and an answer to your question.")
@@ -199,9 +199,9 @@ if upload is not None:
         else:
             st.audio(upload)
 
-# ---------------------------------------------------------------------------
+
 # 5. UI — Lab Part B: optional question, Analyze button, results
-# ---------------------------------------------------------------------------
+
 question = st.text_input("Optional question about the file",
                          placeholder="e.g., What is the main takeaway of this slide?")
 
