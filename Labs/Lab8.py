@@ -27,15 +27,13 @@ st.title("Lab 8: Claim Checker (RAG + Re-ranking)")
 DATA_DIR = Path("./Lab-07-Data")           # put the SciFact files here
 # NOTE: "./ChromaDB_for_Lab" resolves under /mount/src on Streamlit Cloud --
 # that's the git-synced source checkout, not a safe place for a live SQLite-
-# backed store (writes/locking aren't guaranteed there, which is what produced
-# the NotFoundError right after create_collection()). /tmp is guaranteed
-# writable on Cloud; it just means the index rebuilds after a container
-# restart instead of silently corrupting.
+# backed store. /tmp is guaranteed writable on Cloud; it just means the index
+# rebuilds after a container restart instead of silently corrupting.
 CHROMA_PATH = str(Path(tempfile.gettempdir()) / "ChromaDB_for_Lab")
-COLLECTION_NAME = "SciFactChunks"          # ... but a NEW collection name
+COLLECTION_NAME = "SciFactChunks"          # new collection name for Lab 8
 CHUNK_WORDS = 120
 CHUNK_OVERLAP = 30
-N_CANDIDATES = 30                          # stage 1 asks for this many
+N_CANDIDATES = 30                          # stage 1 asks for this many chunks
 TOP_N = 3                                  # abstracts that reach the prompt
 
 # ---------------------------------------------------------------------------
@@ -171,10 +169,8 @@ def build_collection():
             coll = _rebuild_collection(chroma_client, ids, docs, metas)
         except chromadb.errors.NotFoundError:
             # Seen on Streamlit Cloud: the collection we just created isn't
-            # immediately visible to the store on the first attempt. One
-            # retry against a fresh client has been enough in practice; if
-            # this still fails, the real fix is CHROMA_PATH (see above),
-            # not another retry.
+            # immediately visible on the first attempt. One retry against a
+            # fresh client has been enough in practice.
             chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
             coll = _rebuild_collection(chroma_client, ids, docs, metas)
     return coll
@@ -225,19 +221,18 @@ def unique_abstracts(doc_ids):
     return out
 
 
-def find_true_rank(question, target_id, search_pool=300):
+def find_chunk_position(question, target_id, search_pool=300):
     """
     Diagnostic only (not used in the verdict path): query stage 1 with a much
-    wider pool than N_CANDIDATES to see whether the answer-key abstract exists
-    in the index at all, and if so, how far out stage 1 actually ranked it.
-    This answers "did we miss it, or does it genuinely not look similar?" --
-    separate from whether N_CANDIDATES was wide enough to catch it.
+    wider pool than N_CANDIDATES and return the CHUNK position (1-based) of the
+    first chunk from the answer-key abstract. N_CANDIDATES counts chunks, not
+    abstracts, so this is the number it must reach to pull the abstract in.
+    Returns None if the abstract is not in the top `search_pool` chunks.
     """
     doc_ids, _ = stage1(question, n_results=search_pool)
-    ranked = unique_abstracts(doc_ids)
-    if target_id in ranked:
-        return ranked.index(target_id) + 1  # 1-based rank
-    return None  # not even in the top `search_pool` chunks
+    if target_id in doc_ids:
+        return doc_ids.index(target_id) + 1
+    return None
 
 
 def get_ranking(question, use_rerank, n_candidates=None):
@@ -264,21 +259,26 @@ def recall_at_k(ranked_ids, relevant, k=3):
     return len(set(ranked_ids[:k]) & relevant) / len(relevant) if relevant else 0.0
 
 
-def evaluate(claim_ids):
-    """Compare search-only vs re-ranked on the chosen claims."""
+def evaluate(claim_ids, n_candidates=N_CANDIDATES):
+    """Compare search-only vs re-ranked: retrieval quality and time."""
     out = {}
     for label, use_rerank in (("Search only", False), ("Re-ranked", True)):
-        ndcgs, recalls, extra_ms = [], [], []
+        ndcgs, recalls, total_ms = [], [], []
         for cid in claim_ids:
-            ranked, s1_ms, rr_ms = get_ranking(claims[cid], use_rerank)
+            ranked, s1_ms, rr_ms = get_ranking(claims[cid], use_rerank, n_candidates)
             ndcgs.append(ndcg_at_k(ranked, qrels[cid], 10))
             recalls.append(recall_at_k(ranked, qrels[cid], TOP_N))
-            extra_ms.append(rr_ms)
+            total_ms.append(s1_ms + rr_ms)
         out[label] = {
             "nDCG@10": float(np.mean(ndcgs)),
             "Recall@3": float(np.mean(recalls)),
-            "Median re-rank time (ms)": float(np.median(extra_ms)),
+            "Median retrieval time (ms)": float(np.median(total_ms)),
         }
+    out["Re-ranked"]["Added by re-ranking (ms)"] = (
+        out["Re-ranked"]["Median retrieval time (ms)"]
+        - out["Search only"]["Median retrieval time (ms)"]
+    )
+    out["Search only"]["Added by re-ranking (ms)"] = 0.0
     return out
 
 
@@ -360,19 +360,22 @@ with tab_check:
 
         if relevant is not None:
             st.write("Answer key (relevant abstract IDs):", ", ".join(sorted(relevant)))
-            st.write(f"Abstracts among the {N_CANDIDATES} candidates: {len(before_ids)}")
+            st.write(
+                f"Distinct abstracts among the {n_candidates_ui} candidate chunks: "
+                f"{len(before_ids)}"
+            )
             for r in sorted(relevant):
                 rank_before = before_ids.index(r) + 1 if r in before_ids else None
                 rank_after = after_ids.index(r) + 1 if r in after_ids else None
                 if rank_before is None:
                     st.warning(
                         f"[{r}] was never found among the top {n_candidates_ui} "
-                        "candidates, so re-ranking cannot help "
+                        "candidate chunks, so re-ranking cannot help "
                         "(it can only reorder what stage 1 retrieved)."
                     )
                     with st.spinner("Checking a wider pool for diagnosis..."):
-                        true_rank = find_true_rank(claim_text, r, search_pool=300)
-                    if true_rank is None:
+                        pos = find_chunk_position(claim_text, r, search_pool=300)
+                    if pos is None:
                         st.caption(
                             f"[{r}] does not appear even in the top 300 chunks. "
                             "This looks like a genuine similarity gap "
@@ -380,25 +383,29 @@ with tab_check:
                         )
                     else:
                         st.caption(
-                            f"[{r}] actually ranks {true_rank} in a wider search. "
-                            f"Raising N_CANDIDATES to {true_rank} or above "
-                            "would recover it; re-ranking alone cannot."
+                            f"[{r}] first appears at chunk position {pos} in a wider "
+                            f"search. Raising N_CANDIDATES to {pos} or above would "
+                            "bring it into the candidates; re-ranking alone cannot."
                         )
                 else:
-                    st.write(f"[{r}] rank before re-ranking: {rank_before}, after: {rank_after}")
+                    st.write(
+                        f"[{r}] abstract rank before re-ranking: {rank_before}, "
+                        f"after: {rank_after}"
+                    )
 
 with tab_eval:
     st.write(
         "Scores retrieval before and after re-ranking against the SciFact "
-        "answer key. Using fewer claims is faster."
+        f"answer key, using N_CANDIDATES = {n_candidates_ui} from the sidebar. "
+        "Using fewer claims is faster."
     )
     n_claims = st.slider("Number of test claims", 10, len(claims), min(50, len(claims)), step=10)
     if st.button("Run evaluation"):
         subset = list(claims.keys())[:n_claims]
         with st.spinner(f"Evaluating {n_claims} claims..."):
-            results = evaluate(subset)
+            results = evaluate(subset, n_candidates=n_candidates_ui)
         st.table(results)
         st.caption(
-            f"Deck reference (300 claims, laptop): nDCG@10 0.672 -> 0.734, "
-            f"Recall@3 0.683 -> 0.724, about +318 ms."
+            "Deck reference (300 claims, N=30, laptop): nDCG@10 0.672 -> 0.734, "
+            "Recall@3 0.683 -> 0.724, about +318 ms."
         )
