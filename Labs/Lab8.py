@@ -21,9 +21,9 @@ from sentence_transformers import CrossEncoder
 
 st.title("Lab 8: Claim Checker (RAG + Re-ranking)")
 
-# ---------------------------------------------------------------------------
+
 # Settings
-# ---------------------------------------------------------------------------
+
 DATA_DIR = Path("./Lab-07-Data")           # put the SciFact files here
 # NOTE: "./ChromaDB_for_Lab" resolves under /mount/src on Streamlit Cloud --
 # that's the git-synced source checkout, not a safe place for a live SQLite-
@@ -117,9 +117,8 @@ except FileNotFoundError as e:
     st.stop()
 
 
-# ---------------------------------------------------------------------------
 # Chunking (new in Lab 7): 120 words, 30 shared with the next piece
-# ---------------------------------------------------------------------------
+
 def chunk_words(text, size=CHUNK_WORDS, overlap=CHUNK_OVERLAP):
     words = text.split()
     step = size - overlap
@@ -129,10 +128,9 @@ def chunk_words(text, size=CHUNK_WORDS, overlap=CHUNK_OVERLAP):
     ]
 
 
-# ---------------------------------------------------------------------------
 # Stage 0: build the ChromaDB collection (same idea as Lab 4 Part A)
 # Chroma embeds with its default model (all-MiniLM-L6-v2): no OpenAI calls.
-# ---------------------------------------------------------------------------
+
 def _rebuild_collection(chroma_client, ids, docs, metas):
     """Delete (if present) and recreate the collection, then bulk-add."""
     try:
@@ -185,9 +183,8 @@ st.sidebar.caption(
 )
 
 
-# ---------------------------------------------------------------------------
 # Stage 1: vector search, asking for MORE results (the one change vs Lab 4)
-# ---------------------------------------------------------------------------
+
 def stage1(question, n_results=N_CANDIDATES):
     results = collection.query(query_texts=[question], n_results=n_results)
     docs = results["documents"][0]
@@ -195,9 +192,8 @@ def stage1(question, n_results=N_CANDIDATES):
     return doc_ids, docs
 
 
-# ---------------------------------------------------------------------------
 # Stage 2: re-rank (NEW). Cross-encoder reads question + chunk together.
-# ---------------------------------------------------------------------------
+
 @st.cache_resource(show_spinner="Loading re-ranker...")
 def load_reranker():
     return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
@@ -245,10 +241,8 @@ def get_ranking(question, use_rerank, n_candidates=None):
     t2 = time.perf_counter()
     return unique_abstracts(doc_ids), (t1 - t0) * 1000, (t2 - t1) * 1000
 
-
-# ---------------------------------------------------------------------------
 # Part C: evaluation metrics
-# ---------------------------------------------------------------------------
+
 def ndcg_at_k(ranked_ids, relevant, k=10):
     dcg = sum(1 / math.log2(i + 2) for i, d in enumerate(ranked_ids[:k]) if d in relevant)
     ideal = sum(1 / math.log2(i + 2) for i in range(min(len(relevant), k)))
@@ -317,9 +311,6 @@ def show_ids(ranked_ids, relevant):
         st.write(f"{i}. [{d}] {abstracts[d][:90]}...{tag}")
 
 
-# ---------------------------------------------------------------------------
-# UI
-# ---------------------------------------------------------------------------
 tab_check, tab_eval = st.tabs(["Check a claim (A, B, D)", "Evaluate (C)"])
 
 with tab_check:
