@@ -37,8 +37,7 @@ Respond in this exact format:
 1. ...
 2. ...
 3. ...
-**Answer:** Answer the user's question, which appears at the END of the user's message.
-Only write "No question asked." if the message says "The user did not ask a question."
+**Answer:** Answer the user's question if one was asked; otherwise write "No question asked."
 
 Rules:
 - Give exactly three key points.
@@ -46,6 +45,44 @@ Rules:
   explicitly instead of guessing.
 - Do not invent exact values (e.g., chart numbers or coordinates) you cannot read clearly.
 """
+
+# Revised prompt (Part B: "compare the output with the source and revise one prompt").
+# Problem seen with SYSTEM_PROMPT on a photo of a woman in a white coat:
+#   - guesses were stated as facts ("medical coat" -> "clinical setting" -> "consultation")
+#   - "exactly three key points" forced a filler point ("wooden paneling adds to the
+#     professional atmosphere")
+#   - nothing was flagged as unclear or missing, and the answer hedged ("likely...
+#     possibly...") before admitting the image doesn't say.
+# Fix: separate what is seen from what is inferred, allow an honest third point,
+# add a required "Unclear or missing" section, and make the answer lead with
+# whether the source actually contains it.
+SYSTEM_PROMPT_V2 = """You are a careful multimodal assistant.
+Use ONLY the evidence in the provided image or transcript. Do not use outside
+knowledge or assume a setting, role, or purpose the source does not show.
+
+Respond in this exact format:
+**Summary:** 2-3 sentences describing only what is directly visible or said.
+**Key points:**
+1. ...
+2. ...
+3. ...
+**Answer:** Answer the user's question if one was asked; otherwise write "No question asked."
+**Unclear or missing:** List anything blurry, cut off, inaudible, ambiguous, or absent
+that matters for understanding the content. Write "None" only if nothing is.
+
+Rules:
+- Each key point must be something you can point to in the source. For text, quote it.
+- Mark anything you infer rather than directly see or hear with "(inferred)".
+- If the source only supports fewer than three meaningful points, write
+  "Not enough evidence for another point." instead of adding filler.
+- For the answer, first say whether the source contains it. If it does not, start
+  with "The source does not show this." and then say what is missing.
+- If text, numbers, or details are blurry, cut off, inaudible, or missing, say so
+  explicitly instead of guessing.
+- Do not invent exact values (e.g., chart numbers or coordinates) you cannot read clearly.
+"""
+
+PROMPTS = {"Original prompt": SYSTEM_PROMPT, "Revised prompt": SYSTEM_PROMPT_V2}
 
 # ---------------------------------------------------------------------------
 # 2. CLIENT (reuse your existing OpenAI setup / secret name)
@@ -84,16 +121,13 @@ def transcribe_audio(client, upload):
 def build_content(question, image_block=None, transcript=None):
     """Combine the user's question with EITHER an image block OR transcript text."""
     q = question.strip() if question else ""
-    question_text = (f"The user asked this question about the content above: {q}"
-                     if q else "The user did not ask a question.")
+    question_text = f"User question: {q}" if q else "User question: (none)"
 
-    content = []
+    content = [{"type": "input_text", "text": question_text}]
     if image_block is not None:
         content.append(image_block)
     if transcript is not None:
         content.append({"type": "input_text", "text": f"Audio transcript:\n{transcript}"})
-    # Question goes LAST so the model sees the evidence first, then the question
-    content.append({"type": "input_text", "text": question_text})
     return content
 
 
@@ -161,55 +195,85 @@ if upload is not None:
     else:
         st.subheader("Preview")
         if mode == "Image":
-            # Embed the image as a data URL (same one prepare_image builds),
-            # which avoids Streamlit's media server and the broken-image icon.
-            data_url = prepare_image(upload)["image_url"]
-            st.markdown(f'<img src="{data_url}" width="600">', unsafe_allow_html=True)
+            st.image(upload, use_container_width=True)
         else:
             st.audio(upload)
 
 # ---------------------------------------------------------------------------
 # 5. UI — Lab Part B: optional question, Analyze button, results
 # ---------------------------------------------------------------------------
-# A form submits the question and the button click together,
-# so the typed question is never lost.
-with st.form("analyze_form"):
-    question = st.text_input("Optional question about the file",
-                             placeholder="e.g., What is the main takeaway of this slide?")
-    submitted = st.form_submit_button("Analyze", type="primary",
-                                      disabled=(upload is None or error is not None))
+question = st.text_input("Optional question about the file",
+                         placeholder="e.g., What is the main takeaway of this slide?")
 
-if submitted:
-    st.caption(f"Question sent: {question.strip() or '(none)'}")
+prompt_choice = st.radio(
+    "Prompt",
+    ["Original prompt", "Revised prompt", "Compare both"],
+    horizontal=True,
+    help="Use 'Compare both' for the before/after screenshot.",
+)
+
+if st.button("Analyze", type="primary", disabled=(upload is None or error is not None)):
     try:
         if mode == "Image":
-            with st.spinner("Analyzing image..."):
+            with st.spinner("Preparing image..."):
                 content = build_content(question, image_block=prepare_image(upload))
-                result = analyze_content(client, content)
         else:
-            with st.spinner("Transcribing audio (call 1 of 2)..."):
+            with st.spinner("Transcribing audio..."):
                 transcript = transcribe_audio(client, upload)
             with st.expander("Transcript (check for transcription errors)"):
                 st.write(transcript if transcript else "(empty transcript)")
-            with st.spinner("Analyzing transcript (call 2 of 2)..."):
-                content = build_content(question, transcript=transcript)
-                result = analyze_content(client, content)
+            content = build_content(question, transcript=transcript)
 
-        st.subheader("Result")
-        st.markdown(result)
+        if prompt_choice == "Compare both":
+            with st.spinner("Analyzing with both prompts..."):
+                before = analyze_content(client, content, SYSTEM_PROMPT)
+                after = analyze_content(client, content, SYSTEM_PROMPT_V2)
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Before: original prompt")
+                st.markdown(before)
+            with col2:
+                st.subheader("After: revised prompt")
+                st.markdown(after)
+        else:
+            with st.spinner("Analyzing..."):
+                result = analyze_content(client, content, PROMPTS[prompt_choice])
+            st.subheader(f"Result ({prompt_choice.lower()})")
+            st.markdown(result)
     except Exception as e:
         st.error(f"Something went wrong: {e}")
 
+with st.sidebar.expander("Show prompts"):
+    st.markdown("**Original prompt**")
+    st.code(SYSTEM_PROMPT, language=None)
+    st.markdown("**Revised prompt**")
+    st.code(SYSTEM_PROMPT_V2, language=None)
+
 # ---------------------------------------------------------------------------
 # 6. REFLECTION COMMENTS
-# Replace these with the exact reflection questions from your assignment.
+# Check these against the exact reflection questions in the assignment.
 #
-# - Tests run: (1) a slide, (2) another image, (3) a short audio clip.
-# - How the output compared with the source: what was accurate, what was
-#   missed or hallucinated?
-# - Prompt revision: which prompt did I change, what did I change, and did
-#   the output improve?
+# - Tests run: (1) a slide: [TODO], (2) a photo of a woman in a white coat at a
+#   table with a notebook and pen, (3) a short audio clip: [TODO].
+#
+# - How the output compared with the source (photo): the visible details were
+#   right (white coat, glasses, smile, notebook, pen, wood paneling). But the
+#   model turned guesses into facts: "medical coat" became a "medical setting"
+#   and then a "clinical consultation", none of which the image shows. The rule
+#   "exactly three key points" pushed it to add a filler point about the wood
+#   paneling. It flagged nothing as unclear or missing.
+#   Slide: [TODO: what it read correctly, any misread text or numbers]
+#   Audio: [TODO: transcription errors? tone or speaker cues lost?]
+#
+# - Prompt revision: I revised SYSTEM_PROMPT into SYSTEM_PROMPT_V2. It requires
+#   every key point to be traceable to the source, marks inferences with
+#   "(inferred)", allows "Not enough evidence for another point" instead of
+#   filler, adds a required "Unclear or missing" section, and makes the answer
+#   start by saying whether the source contains it. Result: [TODO: describe the
+#   before/after from the "Compare both" screenshot].
+#
 # - Image vs. audio path: the image is sent directly as pixels (input_image);
-#   audio is transcribed first and only text reaches the model (Path 1),
-#   so tone and speaker cues are lost.
+#   audio is transcribed first and only text reaches the model (Path 1: LLM +
+#   Tools), so tone, pauses and speaker cues are lost (the Telephone Problem),
+#   and any transcription error carries into the answer.
 # ---------------------------------------------------------------------------
