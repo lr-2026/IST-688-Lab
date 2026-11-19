@@ -58,9 +58,9 @@ openai_api_key = st.secrets["OPENAI_API_KEY"]
 client = OpenAI(api_key=openai_api_key)
 
 
-# =====================================================================
-# Part A: the persistent memory store (built once per session, like Lab 4)
-# =====================================================================
+
+# Part A: the persistent memory store 
+
 def build_lab10_memorydb(api_key: str, folder: Path = MEMORY_FOLDER):
     # in Lab 4 you used chromadb.Client(), which lives in RAM and is gone when the app stops.
     # PersistentClient saves to a folder on disk, so a new session (or a restart) can open it again.
@@ -85,9 +85,9 @@ if "Lab10_MemoryDB" not in st.session_state:
 collection = st.session_state.Lab10_MemoryDB
 
 
-# =====================================================================
+
 # Part B: WRITE - decide what is worth remembering, then save it
-# =====================================================================
+
 def should_remember(text: str) -> bool:
     # TODO Part B, step 4: return True only for statements about the user worth keeping.
     #   1. clean = text.strip().lower()
@@ -120,9 +120,9 @@ def save_memory(collection, user_id: str, text: str) -> str:
     return memory_id
 
 
-# =====================================================================
+
 # Part C: READ - pull back this user's most relevant memories
-# =====================================================================
+
 def recall_memories(collection, user_id: str, query: str, k: int = RECALL_K):
     # TODO Part C: return up to k of THIS user's memories that best match the query, as a list of
     # dicts like {"text": ..., "type": ..., "date": ...}.
@@ -143,9 +143,9 @@ def forget_user(collection, user_id: str) -> bool:
     return False
 
 
-# =====================================================================
+
 # Part D: INJECT - put the memories into the system prompt
-# =====================================================================
+
 def build_system_prompt(memories, memory_on: bool) -> str:
     # TODO Part D: add the memories to the END of the Lab 3 system prompt.
     #   - if memory is off, return SYSTEM_PROMPT unchanged (stateless, like Lab 3)
@@ -158,9 +158,9 @@ def build_system_prompt(memories, memory_on: bool) -> str:
     return SYSTEM_PROMPT   # <- replace this line
 
 
-# =====================================================================
+
 # sidebar: who is chatting + memory switch
-# =====================================================================
+
 with st.sidebar:
     st.header("Long-term memory")
     user_id = st.text_input("Your name / user id", key="lab10_user").strip().lower()
