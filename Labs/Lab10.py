@@ -1,5 +1,5 @@
 # Lab 10 - Chatbot with Long-Term Memory (STARTER)
-# copy this into your Labs folder as Lab10.py. Part A is done for you. Fill in the TODOs in Parts B, C and D.
+# Labs/Lab10.py. Parts A, B, C and D are complete (plus the Forget me and expiry stretch goals).
 # IST 688 Building Human-Centered AI Applications, team topic: long-term memory
 #
 # this is your Lab3.py (streaming chatbot + 2-exchange buffer + system prompt first)
@@ -55,6 +55,11 @@ ABOUT_ME_PHRASES = [
     "i work", "i live", "call me", "remember that",
 ]
 MIN_WORDS = 4   # anything shorter is almost always small talk ("ok thanks", "hi there")
+# a message that starts with one of these is a question, even if the user forgot the "?"
+QUESTION_WORDS = (
+    "what", "where", "who", "why", "how", "when", "which",
+    "do", "does", "did", "can", "could", "is", "are", "should", "will",
+)
 
 st.title("🧠 Lab 10 - Chatbot with Long-Term Memory")
 st.write("Same chatbot as Lab 3, but it remembers facts about you after the chat ends.")
@@ -107,6 +112,8 @@ def should_remember(text: str) -> bool:
         return False   # small talk: "ok thanks"
     if clean.endswith("?"):
         return False   # a question is not a fact
+    if clean.split()[0] in QUESTION_WORDS:
+        return False   # "where do i study" is a question even without a "?"
     # pad with spaces so "my " does not match "army "
     padded = " " + clean + " "
     return any(" " + phrase in padded for phrase in ABOUT_ME_PHRASES)
