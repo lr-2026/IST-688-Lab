@@ -10,9 +10,8 @@ from openai import OpenAI
 # Lab 11 Part A: the OpenAI Agents SDK (pip install openai-agents)
 from agents import Agent, ItemHelpers, Runner, function_tool, set_default_openai_key
 
-# ---------------------------------------------------------------
 # Weather data function (from Lab 5)
-# ---------------------------------------------------------------
+
 
 
 def get_current_weather(location: str = "Syracuse, NY") -> dict:
@@ -82,9 +81,9 @@ def get_current_weather(location: str = "Syracuse, NY") -> dict:
     }
 
 
-# ---------------------------------------------------------------
+
 # Part B: "What to Wear" bot (Streamlit + OpenAI)
-# ---------------------------------------------------------------
+
 
 st.title("👕 What to Wear Bot")
 st.write(
@@ -112,9 +111,9 @@ client = OpenAI(api_key=api_key)
 set_default_openai_key(api_key)
 
 
-# ---------------------------------------------------------------
+
 # Lab 11 Part B: the same weather function, as a tool for agents
-# ---------------------------------------------------------------
+
 @function_tool
 def get_weather(location: str = "Syracuse, NY") -> dict:
     """Get today's weather for a location: current temperature, feels-like,
@@ -123,9 +122,9 @@ def get_weather(location: str = "Syracuse, NY") -> dict:
     return get_current_weather(location)
 
 
-# ---------------------------------------------------------------
+
 # Lab 11 Part C: three specialists and a manager
-# ---------------------------------------------------------------
+
 MODEL = "gpt-4o-mini"   # same model as Lab 5 (the deck uses gpt-5-mini; either works)
 
 # Specialist 1: the only agent with a tool
@@ -188,9 +187,8 @@ manager = Agent(
 )
 
 
-# ---------------------------------------------------------------
 # Lab 11 Part E: ONE agent that does everything (to compare with the team)
-# ---------------------------------------------------------------
+
 single_agent = Agent(
     name="Single agent",
     instructions=(
@@ -204,9 +202,8 @@ single_agent = Agent(
     model=MODEL,
 )
 
-# ---------------------------------------------------------------
 # Lab 11 Bonus: triage with handoffs
-# ---------------------------------------------------------------
+
 packing_agent = Agent(
     name="Packing agent",
     handoff_description="Packing lists for trips.",
@@ -236,9 +233,8 @@ def run_agent(agent, prompt: str):
     return asyncio.run(Runner.run(agent, prompt))
 
 
-# ---------------------------------------------------------------
 # Lab 11 Part D: look behind the scenes
-# ---------------------------------------------------------------
+
 def show_behind_the_scenes(result, seconds: float):
     with st.expander("Behind the scenes", expanded=True):
         usage = result.context_wrapper.usage          # the cost of the run
@@ -421,9 +417,9 @@ if go:
     st.write(advice)
 
 
-# ---------------------------------------------------------------
+
 # Lab 11 Part C: the team version
-# ---------------------------------------------------------------
+
 st.divider()
 st.header("👥 Team version (Lab 11)")
 st.write("A Manager asks the Weather, Stylist and Activities agents, then writes one answer.")
@@ -443,9 +439,9 @@ if st.button("Ask the team"):
     show_behind_the_scenes(team_result, team_seconds)   # Part D
 
 
-# ---------------------------------------------------------------
+
 # Lab 11 Part E: is the team worth it?
-# ---------------------------------------------------------------
+
 st.divider()
 st.header("⚖️ Part E: Is the team worth it?")
 st.write("Runs the single agent and the team on the same cities, then compares cost and speed.")
@@ -516,9 +512,9 @@ if "cmp_rows" in st.session_state:
             st.write(text)
 
 
-# ---------------------------------------------------------------
+
 # Lab 11 Bonus: triage with handoffs
-# ---------------------------------------------------------------
+
 st.divider()
 st.header("🔀 Bonus: Triage with handoffs")
 st.write(
