@@ -9,4 +9,5 @@ langchain-openai
 requests
 sentence-transformers
 numpy
+openai-agents
    
