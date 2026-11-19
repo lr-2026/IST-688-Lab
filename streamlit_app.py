@@ -9,7 +9,7 @@ Lab6 = st.Page("Labs/Lab6.py", title="Lab 6 - LangChain")
 Lab8 = st.Page("Labs/Lab8.py", title="Lab 8 - LabRerank")
 LabMM = st.Page("Labs/LabMultimodal.py", title="Lab 9 - Multimodal", icon=":material/perm_media:")
 Lab10 = st.Page("Labs/Lab10.py", title="Lab 10 - Longterm memory")
-Lab11 = st.page("Labs/Lab11.py", title="Lab 11 - Multi-Agent")
+Lab11 = st.Page("Labs/Lab11.py", title="Lab 11 - Multi-Agent")
 pg = st.navigation([Lab11, Lab10, LabMM, Lab8, Lab6, Lab5, Lab4, Lab3, Lab2, Lab1])
 pg.run()
 
