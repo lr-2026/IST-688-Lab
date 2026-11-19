@@ -1,5 +1,5 @@
-# Lab 9 - Chatbot with Long-Term Memory (STARTER)
-# copy this into your Labs folder as Lab9.py. Part A is done for you. Fill in the TODOs in Parts B, C and D.
+# Lab 10 - Chatbot with Long-Term Memory (STARTER)
+# copy this into your Labs folder as Lab10.py. Part A is done for you. Fill in the TODOs in Parts B, C and D.
 # IST 688 Building Human-Centered AI Applications, team topic: long-term memory
 #
 # this is your Lab3.py (streaming chatbot + 2-exchange buffer + system prompt first)
@@ -30,8 +30,8 @@ import chromadb
 from chromadb.utils import embedding_functions
 
 # settings
-MEMORY_FOLDER = Path(__file__).parent / "lab9_memory_db"   # chroma writes its files here (survives a restart)
-COLLECTION_NAME = "Lab9Memory"                              # the long-term memory collection
+MEMORY_FOLDER = Path(__file__).parent / "lab10_memory_db"  # chroma writes its files here (survives a restart)
+COLLECTION_NAME = "Lab10Memory"                             # the long-term memory collection
 EMBED_MODEL = "text-embedding-3-small"                      # same embeddings model as Lab 4
 CHAT_MODEL = "gpt-4.1"                                      # same llm as Lab 3
 BUFFER_EXCHANGES = 2                                        # short-term memory: last 2 user+assistant pairs (Lab 3)
@@ -56,7 +56,7 @@ ABOUT_ME_PHRASES = [
 ]
 MIN_WORDS = 4   # anything shorter is almost always small talk ("ok thanks", "hi there")
 
-st.title("🧠 Lab 9 - Chatbot with Long-Term Memory")
+st.title("🧠 Lab 10 - Chatbot with Long-Term Memory")
 st.write("Same chatbot as Lab 3, but it remembers facts about you after the chat ends.")
 
 # api key
@@ -73,7 +73,7 @@ client = OpenAI(api_key=openai_api_key)
 # =====================================================================
 # Part A: the persistent memory store (built once per session, like Lab 4)
 # =====================================================================
-def build_lab9_memorydb(api_key: str, folder: Path = MEMORY_FOLDER):
+def build_lab10_memorydb(api_key: str, folder: Path = MEMORY_FOLDER):
     # in Lab 4 you used chromadb.Client(), which lives in RAM and is gone when the app stops.
     # PersistentClient saves to a folder on disk, so a new session (or a restart) can open it again.
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -86,15 +86,15 @@ def build_lab9_memorydb(api_key: str, folder: Path = MEMORY_FOLDER):
         embedding_function=openai_ef,
     )
     # keep the client around so it isn't garbage-collected (same trick as Lab 4)
-    st.session_state._lab9_chroma_client = chroma_client
+    st.session_state._lab10_chroma_client = chroma_client
     return collection
 
 
 # only open the db once per session and keep it in session_state
-if "Lab9_MemoryDB" not in st.session_state:
-    st.session_state.Lab9_MemoryDB = build_lab9_memorydb(openai_api_key)
+if "Lab10_MemoryDB" not in st.session_state:
+    st.session_state.Lab10_MemoryDB = build_lab10_memorydb(openai_api_key)
 
-collection = st.session_state.Lab9_MemoryDB
+collection = st.session_state.Lab10_MemoryDB
 
 
 # =====================================================================
@@ -175,10 +175,10 @@ def build_system_prompt(memories, memory_on: bool) -> str:
 # =====================================================================
 with st.sidebar:
     st.header("Long-term memory")
-    user_id = st.text_input("Your name / user id", key="lab9_user").strip().lower()
+    user_id = st.text_input("Your name / user id", key="lab10_user").strip().lower()
     memory_on = st.toggle("Use long-term memory", value=True)
     if st.button("Start new chat (clears short-term memory)"):
-        st.session_state.lab9_messages = []     # the Lab 3 buffer is wiped, long-term memory is not
+        st.session_state.lab10_messages = []     # the Lab 3 buffer is wiped, long-term memory is not
     if user_id and st.button("Forget me (delete my memories)"):
         if forget_user(collection, user_id):
             st.success(f"Deleted all memories for '{user_id}'.")
@@ -190,23 +190,23 @@ if not user_id:
 
 # if someone switches to a different user id, start a fresh chat so the Lab 3 buffer
 # doesn't carry the last person's conversation into the new person's prompt
-if st.session_state.get("lab9_current_user") != user_id:
-    st.session_state.lab9_current_user = user_id
-    st.session_state.lab9_messages = []
-    st.session_state.lab9_last_prompt = None
+if st.session_state.get("lab10_current_user") != user_id:
+    st.session_state.lab10_current_user = user_id
+    st.session_state.lab10_messages = []
+    st.session_state.lab10_last_prompt = None
 
 # chat history (short-term memory, exactly like Lab 3)
-if "lab9_messages" not in st.session_state or not st.session_state.lab9_messages:
-    st.session_state.lab9_messages = [
+if "lab10_messages" not in st.session_state or not st.session_state.lab10_messages:
+    st.session_state.lab10_messages = [
         {"role": "assistant", "content": f"Hi {user_id}! What would you like to know?"}
     ]
 
-for message in st.session_state.lab9_messages:
+for message in st.session_state.lab10_messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 if prompt := st.chat_input("Type your message..."):
-    st.session_state.lab9_messages.append({"role": "user", "content": prompt})
+    st.session_state.lab10_messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
@@ -215,7 +215,7 @@ if prompt := st.chat_input("Type your message..."):
     system_prompt = build_system_prompt(memories, memory_on)
 
     # Lab 3 buffer: last 2 exchanges, with the system prompt always first
-    buffered_messages = st.session_state.lab9_messages[-(BUFFER_EXCHANGES * 2):]
+    buffered_messages = st.session_state.lab10_messages[-(BUFFER_EXCHANGES * 2):]
     messages_to_send = [{"role": "system", "content": system_prompt}] + buffered_messages
 
     with st.chat_message("assistant"):
@@ -225,17 +225,17 @@ if prompt := st.chat_input("Type your message..."):
             stream=True,
         )
         response = st.write_stream(stream)
-    st.session_state.lab9_messages.append({"role": "assistant", "content": response})
+    st.session_state.lab10_messages.append({"role": "assistant", "content": response})
 
     # WRITE after answering: only if memory is on and the filter says it's worth keeping
     saved = None
     if memory_on and should_remember(prompt):
         save_memory(collection, user_id, prompt)
         saved = prompt
-    st.session_state.lab9_last_prompt = {"system": system_prompt, "memories": memories, "saved": saved}
+    st.session_state.lab10_last_prompt = {"system": system_prompt, "memories": memories, "saved": saved}
 
 # Part D: show exactly what the model got, so you can prove the memory is in the prompt
-last = st.session_state.get("lab9_last_prompt")
+last = st.session_state.get("lab10_last_prompt")
 if last:
     if last["saved"]:
         st.caption(f"💾 Saved to long-term memory: \"{last['saved']}\"")
