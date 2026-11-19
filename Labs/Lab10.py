@@ -1,16 +1,4 @@
-# Lab 10 - Chatbot with Long-Term Memory (STARTER)
-# copy this into your Labs folder as Lab10.py. Part A is done for you. Fill in the TODOs in Parts B, C and D.
-# IST 688 Building Human-Centered AI Applications, team topic: long-term memory
-#
-# this is your Lab3.py (streaming chatbot + 2-exchange buffer + system prompt first)
-# plus a persistent chromadb store, the same idea as the vector db in Lab 4.
-# the difference: in Lab 4 the vector db held course pdfs (the same for everyone),
-# here it holds short notes about each user, so the bot still knows them next session.
-# if you want to keep your own Lab 3 code, copy Part A and Parts B to D into it instead.
 
-# fix for the sqlite3 error on streamlit cloud - chroma needs a newer version.
-# this swaps in pysqlite3 (from requirements.txt) and has to run BEFORE chromadb is imported.
-# the try/except means it still runs fine in codespaces where pysqlite3 isn't installed.
 try:
     __import__("pysqlite3")
     import sys
