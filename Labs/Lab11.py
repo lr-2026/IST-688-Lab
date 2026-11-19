@@ -5,8 +5,11 @@ import requests
 import streamlit as st
 from openai import OpenAI
 
+# Lab 11 Part A: the OpenAI Agents SDK (pip install openai-agents)
+from agents import Agent, Runner, function_tool, set_default_openai_key
+
 # ---------------------------------------------------------------
-# Part A: weather data function
+# Weather data function (from Lab 5)
 # ---------------------------------------------------------------
 
 
@@ -89,7 +92,11 @@ st.write(
 
 # --- OpenAI client setup ---
 # The name must match the key in your .streamlit/secrets.toml
-api_key = st.secrets.get("My_newkey", None)
+api_key = None
+for name in ("OPENAI_API_KEY", "My_newkey"):
+    if name in st.secrets:
+        api_key = st.secrets[name]
+        break
 if not api_key:
     api_key = st.sidebar.text_input("OpenAI API Key", type="password")
 
@@ -99,7 +106,22 @@ if not api_key:
 
 client = OpenAI(api_key=api_key)
 
-# --- Tool definition for the OpenAI API ---
+# Lab 11 Part A: the Agents SDK keeps its own key, so give it the same one
+set_default_openai_key(api_key)
+
+
+# ---------------------------------------------------------------
+# Lab 11 Part B: the same weather function, as a tool for agents
+# ---------------------------------------------------------------
+@function_tool
+def get_weather(location: str = "Syracuse, NY") -> dict:
+    """Get today's weather for a location: current temperature, feels-like,
+    conditions, wind, humidity, UV, high/low, chance of rain, and how it
+    changes from morning to evening. Use 'Syracuse, NY' if no location is given."""
+    return get_current_weather(location)
+
+
+# --- Tool definition for the OpenAI API (the old Lab 5 way, kept for now) ---
 tools = [
     {
         "type": "function",
@@ -256,3 +278,278 @@ if go:
 
     st.subheader("Recommendation")
     st.write(advice)
+# ---------------------------------------------------------------
+# Lab 11 Part C: three specialists and a manager
+# ---------------------------------------------------------------
+MODEL = "gpt-4o-mini"   # same model as Lab 5 (the deck uses gpt-5-mini; either works)
+
+# Specialist 1: the only agent with a tool
+weather_agent = Agent(
+    name="Weather agent",
+    instructions=(
+        "Summarize today's weather for the location you are given. Facts only: "
+        "temperature, feels-like, conditions, wind, UV, chance of rain, and how "
+        "it changes from morning to evening."
+    ),
+    tools=[get_weather],
+    model=MODEL,
+)
+
+# Specialist 2: no tools, it only reasons about the weather it is told
+stylist_agent = Agent(
+    name="Stylist agent",
+    instructions=(
+        "You are told today's weather. Recommend what to wear. Consider how the "
+        "temperature changes through the day, rain, wind and UV. Be specific and short."
+    ),
+    model=MODEL,
+)
+
+# Specialist 3: no tools either
+activities_agent = Agent(
+    name="Activities agent",
+    instructions=(
+        "You are told today's weather. Suggest outdoor activities that suit it. "
+        "Be specific and short."
+    ),
+    model=MODEL,
+)
+
+# The manager calls each specialist like a tool, then writes the one final answer
+manager = Agent(
+    name="Manager",
+    instructions=(
+        "You help people decide what to wear and what to do today. "
+        "First call weather_report for the location (use 'Syracuse, NY' if none is given). "
+        "Then call clothing_advice and activity_ideas, passing along the weather you got. "
+        "Combine everything into one short answer with bullet points."
+    ),
+    tools=[
+        weather_agent.as_tool(
+            tool_name="weather_report",
+            tool_description="Summarize today's weather for a location.",
+        ),
+        stylist_agent.as_tool(
+            tool_name="clothing_advice",
+            tool_description="Recommend clothing for a described forecast.",
+        ),
+        activities_agent.as_tool(
+            tool_name="activity_ideas",
+            tool_description="Suggest outdoor activities for a described forecast.",
+        ),
+    ],
+    model=MODEL,
+)
+
+
+def run_agent(agent, prompt: str):
+    # Runner.run_sync can complain about the event loop inside Streamlit,
+    # so run the async version ourselves
+    return asyncio.run(Runner.run(agent, prompt))
+
+
+# ---------------------------------------------------------------
+# Lab 11 Part D: look behind the scenes
+# ---------------------------------------------------------------
+def show_behind_the_scenes(result, seconds: float):
+    with st.expander("Behind the scenes", expanded=True):
+        usage = result.context_wrapper.usage          # the cost of the run
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Model requests", usage.requests)
+        c2.metric("Total tokens", usage.total_tokens)
+        c3.metric("Seconds", f"{seconds:.1f}")
+        c4.metric("Last agent", result.last_agent.name)  # who finished the job
+
+        st.markdown("**Every step, in order** (`result.new_items`):")
+        for i, item in enumerate(result.new_items, 1):
+            raw = item.raw_item
+            if item.type == "tool_call_item":
+                detail = f"`{getattr(raw, 'name', '?')}` with {getattr(raw, 'arguments', '')}"
+            elif item.type == "tool_call_output_item":
+                detail = str(item.output)[:300]
+            elif item.type == "message_output_item":
+                detail = ItemHelpers.text_message_output(item)[:300]
+            else:
+                detail = ""
+            st.markdown(f"{i}. **{item.type}** {detail}")
+
+
+# --- Tool definition for the OpenAI API (the old Lab 5 way, kept for now) ---
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_weather",
+            "description": (
+                "Get current weather and today's forecast for a location: "
+                "temperature, feels-like, conditions, wind, humidity, UV, "
+                "high/low, chance of rain, and morning/afternoon/evening changes."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": (
+                            "The city and state/country, e.g. 'Syracuse, NY' "
+                            "or 'Paris, France'. Use 'Syracuse, NY' if the "
+                            "user gives no location."
+                        ),
+                    }
+                },
+                "required": [],
+            },
+        },
+    }
+]
+
+available_functions = {"get_current_weather": get_current_weather}
+
+# --- UI (not a chatbot: one input, one answer) ---
+city = st.text_input("City", placeholder="e.g. Syracuse, NY")
+go = st.button("What should I wear?")
+
+if go:
+    if city.strip():
+        user_prompt = (
+            f"What should I wear today in {city}, and what outdoor "
+            f"activities would be appropriate?"
+        )
+    else:
+        user_prompt = (
+            "What should I wear today, and what outdoor activities "
+            "would be appropriate?"
+        )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a helpful assistant that gives clothing and outdoor "
+                "activity advice based on the weather. Use the "
+                "get_current_weather tool when you need weather data. If the "
+                "user does not give a location, use 'Syracuse, NY'."
+            ),
+        },
+        {"role": "user", "content": user_prompt},
+    ]
+
+    # First call: the model decides whether it needs the tool
+    with st.spinner("Checking the weather..."):
+        first_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+        )
+
+    response_message = first_response.choices[0].message
+    tool_calls = response_message.tool_calls
+    weather_data = None
+
+    if tool_calls:
+        # Add the assistant's tool-call message as a plain dict
+        messages.append(
+            {
+                "role": "assistant",
+                "content": response_message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in tool_calls
+                ],
+            }
+        )
+
+        for tool_call in tool_calls:
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments or "{}")
+            function_to_call = available_functions[function_name]
+
+            try:
+                function_response = function_to_call(**function_args)
+                weather_data = function_response
+            except Exception as e:
+                function_response = {"error": str(e)}
+
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(function_response),
+                }
+            )
+
+        # Second call: weather info is in the prompt, ask for the advice
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Using the weather information above, suggest appropriate "
+                    "clothes to wear today (consider how it changes from "
+                    "morning to evening, rain, wind, and UV) and suggest "
+                    "outdoor activities that suit the weather. Keep it short "
+                    "and use bullet points."
+                ),
+            }
+        )
+
+        with st.spinner("Putting together your advice..."):
+            second_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+            )
+
+        advice = second_response.choices[0].message.content
+    else:
+        # Model answered without needing the tool
+        advice = response_message.content
+
+    # --- Display results ---
+    if weather_data:
+        st.subheader(f"Current weather in {weather_data['resolved_location']}")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Temperature", f"{weather_data['temperature_F']:.0f}°F")
+        col2.metric("Feels like", f"{weather_data['feels_like_F']:.0f}°F")
+        col3.metric(
+            "High / Low",
+            f"{weather_data['high_F']:.0f}° / {weather_data['low_F']:.0f}°",
+        )
+        col4.metric("Chance of rain", f"{weather_data['chance_of_rain_pct']:.0f}%")
+        st.caption(
+            f"{weather_data['description']} • "
+            f"Wind {weather_data['wind_mph']:.0f} mph • "
+            f"Humidity {weather_data['humidity_pct']:.0f}% • "
+            f"UV index {weather_data['uv_index']:.0f}"
+        )
+
+    st.subheader("Recommendation")
+    st.write(advice)
+
+
+# ---------------------------------------------------------------
+# Lab 11 Part C: the team version
+# ---------------------------------------------------------------
+st.divider()
+st.header("👥 Team version (Lab 11)")
+st.write("A Manager asks the Weather, Stylist and Activities agents, then writes one answer.")
+
+team_city = st.text_input("City for the team", value="Syracuse, NY", key="team_city")
+if st.button("Ask the team"):
+    team_prompt = (
+        f"What should I wear today in {team_city}, and what outdoor "
+        f"activities would be appropriate?"
+    )
+    with st.spinner("The team is working..."):
+        start = time.time()
+        team_result = run_agent(manager, team_prompt)
+        team_seconds = time.time() - start
+    st.subheader("Team answer")
+    st.write(team_result.final_output)
+    show_behind_the_scenes(team_result, team_seconds)   # Part D
